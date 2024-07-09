@@ -104,3 +104,13 @@ CREATE TABLE `reactions` (
   `emoji_name` VARCHAR(255) NOT NULL,
   `created_at` BIGINT NOT NULL
 ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+
+
+CREATE INDEX icons_user_id_IDX USING BTREE ON isupipe.icons (user_id);
+CREATE INDEX livestream_tags_livestream_id_IDX USING BTREE ON isupipe.livestream_tags (livestream_id);
+CREATE INDEX livestreams_user_id_IDX USING BTREE ON isupipe.livestreams (user_id);
+CREATE INDEX livecomments_livestream_id_IDX USING BTREE ON isupipe.livecomments (livestream_id);
+CREATE INDEX reactions_livestream_id_IDX USING BTREE ON isupipe.reactions (livestream_id);
+CREATE INDEX reservation_slots_start_at_IDX USING BTREE ON isupipe.reservation_slots (start_at,end_at);
+CREATE INDEX ng_words_user_id_IDX USING BTREE ON isupipe.ng_words (user_id,livestream_id);
+CREATE INDEX themes_user_id_IDX USING BTREE ON isupipe.themes (user_id);

@@ -24,6 +24,7 @@ re:
 	make nrestart
 	make mrestart
 	ssh -A 192.168.0.12 "cd webapp && make mrestart"
+	ssh -A 192.168.0.13 "cd webapp && make mrestart"
 
 .PHONY: build
 build:

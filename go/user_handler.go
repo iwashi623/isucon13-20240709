@@ -256,7 +256,9 @@ func registerHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert user theme: "+err.Error())
 	}
 
-	if out, err := exec.Command("ssh", "192.168.0.13", "-A", fmt.Sprintf("sudo pdnsutil add-record t.isucon.pw %s A 0 192.168.0.11", req.Name)).CombinedOutput(); err != nil {
+	cm := fmt.Sprintf("sudo pdnsutil add-record t.isucon.pw %s A 0 192.168.0.11", req.Name)
+	if out, err := exec.Command("ssh", "192.168.0.13", "-A", cm).CombinedOutput(); err != nil {
+		fmt.Println(string(cm))
 		return echo.NewHTTPError(http.StatusInternalServerError, string(out)+": "+err.Error())
 	}
 

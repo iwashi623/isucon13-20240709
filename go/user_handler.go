@@ -260,7 +260,7 @@ func registerHandler(c echo.Context) error {
 	// }
 
 	// dnsサーバー(3号機)にレコードを追加
-	if _, err := dnsDbConn.Exec("INSERT INTO records (name, type, content, ttl, prio) VALUES (?, 'A', ?, 0, prio)", req.Name+".t.isucon.pw", "192.168.0.11"); err != nil {
+	if _, err := dnsDbConn.Exec("INSERT INTO records (domain_id, name, type, content, ttl, prio) VALUES (1, ?, 'A', ?, 0, 0)", req.Name+".t.isucon.pw", "192.168.0.11"); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert DNS record: "+err.Error())
 	}
 

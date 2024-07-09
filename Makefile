@@ -1,4 +1,16 @@
 now = $(shell date "+%Y%m%d%H%M%S")
+DARWIN_TARGET_ENV=GOOS=darwin GOARCH=arm64
+LINUX_TARGET_ENV=GOOS=linux GOARCH=amd64
+
+BUILD=go build
+
+DOCKER_BUILD=sudo docker build
+DOCKER_BUILD_OPTS=--no-cache
+
+DOCKER_RMI=sudo docker rmi -f
+
+DESTDIR=.
+TAG=isupipe:latest
 
 .PHONY: bn
 bn:
@@ -11,18 +23,18 @@ re:
 	make arestart
 	make nrestart
 	make mrestart
-	# ssh -A 172.31.0.169 "cd webapp && make mrestart"
+	ssh -A 192.168.0.12 "cd webapp && make mrestart"
 
 .PHONY: build
 build:
-	cd ./go && go build -o isucondition
+	cd go && CGO_ENABLED=0 $(LINUX_TARGET_ENV)  $(BUILD) -o $(DESTDIR)/isupipe -ldflags "-s -w"
 
 # アプリの再起動
 .PHONY: arestart
 arestart:
 	make build
-	sudo systemctl restart isucondition.go.service
-	sudo systemctl status isucondition.go.service
+	sudo systemctl restart isupipe-go.service
+	sudo systemctl status isupipe-go.service
 
 # nginxの再起動
 .PHONY: nrestart

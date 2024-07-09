@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"time"
 
 	"github.com/google/uuid"
@@ -256,10 +255,13 @@ func registerHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert user theme: "+err.Error())
 	}
 
-	cm := fmt.Sprintf("sudo pdnsutil add-record t.isucon.pw %s A 0 192.168.0.11", req.Name)
-	if out, err := exec.Command("ssh", "192.168.0.13", "-A", cm).CombinedOutput(); err != nil {
-		fmt.Println(string(cm))
-		return echo.NewHTTPError(http.StatusInternalServerError, string(out)+": "+err.Error())
+	// if out, err := exec.Command("pdnsutil", "add-record", "t.isucon.pw", req.Name, "A", "0", powerDNSSubdomainAddress).CombinedOutput(); err != nil {
+	// 	return echo.NewHTTPError(http.StatusInternalServerError, string(out)+": "+err.Error())
+	// }
+
+	// dnsサーバー(3号機)にレコードを追加
+	if _, err := dnsDbConn.Exec("INSERT INTO records (name, type, content, ttl, prio) VALUES (?, 'A', ?, 0, prio)", req.Name+".t.isucon.pw", "192.168.0.11"); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert DNS record: "+err.Error())
 	}
 
 	user, err := fillUserResponse(ctx, tx, userModel)

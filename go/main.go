@@ -31,6 +31,7 @@ var (
 	powerDNSSubdomainAddress string
 	dbConn                   *sqlx.DB
 	secret                   = []byte("isucon13_session_cookiestore_defaultsecret")
+	dnsDbConn                *sqlx.DB
 )
 
 func init() {
@@ -65,6 +66,7 @@ func connectDB(logger echo.Logger) (*sqlx.DB, error) {
 	conf.Passwd = "isucon"
 	conf.DBName = "isupipe"
 	conf.ParseTime = true
+	conf.InterpolateParams = true
 
 	if v, ok := os.LookupEnv(networkTypeEnvKey); ok {
 		conf.Net = v
@@ -97,7 +99,31 @@ func connectDB(logger echo.Logger) (*sqlx.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(10)
+	db.SetMaxOpenConns(100000)
+
+	if err := db.Ping(); err != nil {
+		return nil, err
+	}
+
+	return db, nil
+}
+
+func connectDNSDB(logger echo.Logger) (*sqlx.DB, error) {
+	conf := mysql.NewConfig()
+
+	conf.Net = "tcp"
+	conf.Addr = net.JoinHostPort("192.168.0.13", "3306")
+	conf.User = "isudns"
+	conf.Passwd = "isudns"
+	conf.DBName = "isudns"
+	conf.ParseTime = true
+	conf.InterpolateParams = true
+
+	db, err := sqlx.Open("mysql", conf.FormatDSN())
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(100000)
 
 	if err := db.Ping(); err != nil {
 		return nil, err
@@ -192,6 +218,14 @@ func main() {
 	}
 	defer conn.Close()
 	dbConn = conn
+
+	dnsConn, err := connectDNSDB(e.Logger)
+	if err != nil {
+		e.Logger.Errorf("failed to connect dns db: %v", err)
+		os.Exit(1)
+	}
+	defer dnsConn.Close()
+	dnsDbConn = dnsConn
 
 	subdomainAddr, ok := os.LookupEnv(powerDNSSubdomainAddressEnvKey)
 	if !ok {

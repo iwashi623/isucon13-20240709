@@ -368,9 +368,9 @@ func getUserHandler(c echo.Context) error {
 		&userModel,
 		`
 	SELECT u.*, t.id AS theme_id, t.dark_mode AS theme_dark_mode, i.image AS user_image  FROM users u
-	LEFT JOIN themes t ON users.id = themes.user_id
-	LEFT JOIN icons i ON users.id = i.user_id
-	WHERE name = ?`,
+	LEFT JOIN themes t ON u.id = t.user_id
+	LEFT JOIN icons i ON u.id = i.user_id
+	WHERE u.name = ?`,
 		username,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

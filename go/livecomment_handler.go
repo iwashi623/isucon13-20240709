@@ -2,17 +2,20 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 )
 
 type PostLivecommentRequest struct {
@@ -27,6 +30,13 @@ type LivecommentModel struct {
 	Comment      string `db:"comment"`
 	Tip          int64  `db:"tip"`
 	CreatedAt    int64  `db:"created_at"`
+}
+
+type FullLivecommentModel struct {
+	*LivecommentModel
+
+	User       *User       `db:"user"`
+	LiveStream *Livestream `db:"livestream"`
 }
 
 type Livecomment struct {
@@ -422,6 +432,170 @@ func moderateHandler(c echo.Context) error {
 	})
 }
 
+func findLivecommentById(ctx context.Context, db myDB, id int) (Livecomment, error) {
+	type dbResult struct {
+		LivecommentModel
+		Tag *struct {
+			ID   *int64  `db:"id"`
+			Name *string `db:"name"`
+		} `db:"tag"`
+		Owner      *FullUserModel         `db:"owner"`
+		Livestream *LivestreamTagDBResult `db:"livestream"`
+	}
+
+	result := []*dbResult{}
+	err := db.SelectContext(ctx, &result,
+		`
+		SELECT 
+			lc.*,
+			ls.id AS 'livestream.id',
+			ls.user_id AS 'livestream.user_id',
+			ls.title AS 'livestream.title',
+			ls.description AS 'livestream.description',
+			ls.playlist_url AS 'livestream.playlist_url',
+			ls.thumbnail_url AS 'livestream.thumbnail_url',
+			ls.start_at AS 'livestream.start_at',
+			ls.end_at AS 'livestream.end_at',
+			u.id AS 'user.id',
+			u.name AS 'user.name',
+			u.display_name AS 'user.display_name',
+			u.description AS 'user.description',
+			u.password AS 'user.password',
+			ute.id AS 'user.theme.id',
+			ute.dark_mode AS 'user.theme.dark_mode',
+			ui.image AS 'user.user_image',
+			o.id AS 'livestream.owner.id',
+			o.name AS 'livestream.owner.name',
+			o.display_name AS 'livestream.owner.display_name',
+			o.description AS 'livestream.owner.description',
+			o.password AS 'livestream.owner.password',
+			ote.id AS 'livestream.owner.theme.id',
+			ote.dark_mode AS 'livestream.owner.theme.dark_mode',
+			oi.image AS 'livestream.owner.user_image',
+			t.id AS 'tag.id',
+			t.name AS 'tag.name'
+		FROM livecomments lc
+		LEFT JOIN livestreams ls ON lc.livestream_id = ls.id
+		LEFT JOIN users u ON lc.user_id = u.id
+		LEFT JOIN themes ute ON u.id = ute.user_id
+		LEFT JOIN icons ui ON u.id = ui.user_id
+		LEFT JOIN users o  ON ls.user_id = o.id
+		LEFT JOIN themes ote ON o.id = ote.user_id
+		LEFT JOIN icons oi ON o.id = oi.user_id
+		LEFT JOIN livestream_tags lst ON ls.id = lst.livestream_id
+		LEFT JOIN tags t ON lst.tag_id = t.id
+		WHERE lc.id = ?
+		`,
+		id)
+	if err != nil {
+		return Livecomment{}, err
+	}
+
+	dummy, err := os.ReadFile(fallbackImage)
+	if err != nil {
+		return Livecomment{}, nil
+	}
+
+	var model *FullLivecommentModel
+	for _, r := range result {
+		if model == nil {
+			model = &FullLivecommentModel{
+				LivecommentModel: &LivecommentModel{
+					ID:           r.ID,
+					UserID:       r.UserID,
+					LivestreamID: r.LivestreamID,
+					Comment:      r.Comment,
+					Tip:          r.Tip,
+					CreatedAt:    r.CreatedAt,
+				},
+				User: &User{
+					ID:          r.Owner.ID,
+					Name:        r.Owner.Name,
+					DisplayName: r.Owner.DisplayName,
+					Description: r.Owner.Description,
+					Theme: Theme{
+						ID:       r.Owner.Theme.ID,
+						DarkMode: r.Owner.Theme.DarkMode,
+					},
+				},
+				LiveStream: &Livestream{
+					ID: r.Livestream.ID,
+					// owner
+					Owner: User{
+						ID:          r.Livestream.User.ID,
+						Name:        r.Livestream.User.Name,
+						DisplayName: r.Livestream.User.DisplayName,
+						Description: r.Livestream.User.Description,
+						Theme: Theme{
+							ID:       r.Livestream.User.Theme.ID,
+							DarkMode: r.Livestream.User.Theme.DarkMode,
+						},
+					},
+					Title:        r.Livestream.Title,
+					Description:  r.Livestream.Description,
+					PlaylistUrl:  r.Livestream.PlaylistUrl,
+					ThumbnailUrl: r.Livestream.ThumbnailUrl,
+					StartAt:      r.Livestream.StartAt,
+					EndAt:        r.Livestream.EndAt,
+					Tags:         make([]Tag, 0),
+				},
+			}
+		}
+		var userImage []byte
+		userImage = r.Livestream.User.UserImage
+		if userImage == nil {
+			userImage = dummy
+		}
+
+		userIconHash := sha256.Sum256(userImage)
+		model.User.IconHash = fmt.Sprintf("%x", userIconHash)
+
+		var ownerImage []byte
+		ownerImage = r.Owner.UserImage
+		if ownerImage == nil {
+			ownerImage = dummy
+		}
+
+		ownerIconHash := sha256.Sum256(ownerImage)
+		model.LiveStream.Owner.IconHash = fmt.Sprintf("%x", ownerIconHash)
+
+		if r.Tag != nil && r.Tag.ID != nil && r.Tag.Name != nil {
+			model.LiveStream.Tags = append(model.LiveStream.Tags, Tag{
+				ID:   lo.FromPtr(r.Tag.ID),
+				Name: lo.FromPtr(r.Tag.Name),
+			})
+		}
+	}
+
+	// commentOwner, err := FindUserById(ctx, tx, int(livecommentModel.UserID))
+	// if err != nil {
+	// 	return Livecomment{}, err
+	// }
+
+	// livestream, err := findLivestreamByIdInTx(ctx, tx, int(livecommentModel.LivestreamID))
+	// if err != nil {
+	// 	return Livecomment{}, err
+	// }
+
+	// livecomment := Livecomment{
+	// 	ID:         livecommentModel.ID,
+	// 	User:       commentOwner,
+	// 	Livestream: livestream,
+	// 	Comment:    livecommentModel.Comment,
+	// 	Tip:        livecommentModel.Tip,
+	// 	CreatedAt:  livecommentModel.CreatedAt,
+	// }
+
+	return Livecomment{
+		ID:         model.ID,
+		User:       *model.User,
+		Livestream: *model.LiveStream,
+		Comment:    model.Comment,
+		Tip:        model.Tip,
+		CreatedAt:  model.CreatedAt,
+	}, nil
+}
+
 func fillLivecommentResponse(ctx context.Context, tx *sqlx.Tx, livecommentModel LivecommentModel) (Livecomment, error) {
 	commentOwner, err := FindUserById(ctx, tx, int(livecommentModel.UserID))
 	if err != nil {
@@ -451,11 +625,16 @@ func fillLivecommentReportResponse(ctx context.Context, tx *sqlx.Tx, reportModel
 		return LivecommentReport{}, err
 	}
 
-	livecommentModel := LivecommentModel{}
-	if err := tx.GetContext(ctx, &livecommentModel, "SELECT * FROM livecomments WHERE id = ?", reportModel.LivecommentID); err != nil {
-		return LivecommentReport{}, err
-	}
-	livecomment, err := fillLivecommentResponse(ctx, tx, livecommentModel)
+	// livecommentModel := LivecommentModel{}
+	// if err := tx.GetContext(ctx, &livecommentModel, "SELECT * FROM livecomments WHERE id = ?", reportModel.LivecommentID); err != nil {
+	// 	return LivecommentReport{}, err
+	// }
+	// livecomment, err := fillLivecommentResponse(ctx, tx, livecommentModel)
+	// if err != nil {
+	// 	return LivecommentReport{}, err
+	// }
+
+	livecomment, err := findLivecommentById(ctx, tx, int(reportModel.LivecommentID))
 	if err != nil {
 		return LivecommentReport{}, err
 	}

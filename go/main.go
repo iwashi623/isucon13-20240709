@@ -13,6 +13,8 @@ import (
 	"os/exec"
 	"strconv"
 
+	_ "net/http/pprof"
+
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
@@ -208,6 +210,10 @@ func main() {
 
 	// 課金情報
 	e.GET("/api/payment", GetPaymentResult)
+
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 
 	e.HTTPErrorHandler = errorResponseHandler
 

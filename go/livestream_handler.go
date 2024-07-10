@@ -178,7 +178,7 @@ func reserveLivestreamHandler(c echo.Context) error {
 
 	// livestream, err := fillLivestreamResponse(ctx, tx, *livestreamModel)
 	var livestreamTagDBResult []*LivestreamTagDBResult
-	err = tx.GetContext(ctx, &livestreamTagDBResult,
+	err = tx.SelectContext(ctx, &livestreamTagDBResult,
 		`
 		SELECT 
 			ls.*,

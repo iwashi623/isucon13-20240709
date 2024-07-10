@@ -37,6 +37,16 @@ type UserModel struct {
 	HashedPassword string `db:"password"`
 }
 
+type FullUserModel struct {
+	ID             int64  `db:"id"`
+	Name           string `db:"name"`
+	DisplayName    string `db:"display_name"`
+	Description    string `db:"description"`
+	HashedPassword string `db:"password"`
+	UserImage      []byte `db:"user_image"`
+	Theme          Theme  `db:"theme"`
+}
+
 type User struct {
 	ID          int64  `json:"id"`
 	Name        string `json:"name"`
@@ -352,27 +362,46 @@ func getUserHandler(c echo.Context) error {
 
 	username := c.Param("username")
 
-	tx, err := dbConn.BeginTxx(ctx, nil)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to begin transaction: "+err.Error())
-	}
-	defer tx.Rollback()
-
-	userModel := UserModel{}
-	if err := tx.GetContext(ctx, &userModel, "SELECT * FROM users WHERE name = ?", username); err != nil {
+	userModel := FullUserModel{}
+	if err := dbConn.GetContext(
+		ctx,
+		&userModel,
+		`
+	SELECT u.*, t.id AS theme_id, t.dark_mode AS theme_dark_mode, i.image AS user_image  FROM users u
+	LEFT JOIN themes t ON users.id = themes.user_id
+	LEFT JOIN icons i ON users.id = i.user_id
+	WHERE name = ?`,
+		username,
+	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return echo.NewHTTPError(http.StatusNotFound, "not found user that has the given username")
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 	}
 
-	user, err := fillUserResponse(ctx, tx, userModel)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill user: "+err.Error())
+	var image []byte
+	image = userModel.UserImage
+	if image == nil {
+		dummy, err := os.ReadFile(fallbackImage)
+		if err != nil {
+			user := User{}
+			return c.JSON(http.StatusOK, user)
+		}
+		image = dummy
 	}
 
-	if err := tx.Commit(); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
+	iconHash := sha256.Sum256(image)
+
+	user := User{
+		ID:          userModel.ID,
+		Name:        userModel.Name,
+		DisplayName: userModel.DisplayName,
+		Description: userModel.Description,
+		Theme: Theme{
+			ID:       userModel.Theme.ID,
+			DarkMode: userModel.Theme.DarkMode,
+		},
+		IconHash: fmt.Sprintf("%x", iconHash),
 	}
 
 	return c.JSON(http.StatusOK, user)

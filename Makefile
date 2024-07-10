@@ -22,7 +22,7 @@ bn:
 re:
 	make arestart
 	make nrestart
-	make mrestart
+	# make mrestart
 	ssh -A 192.168.0.12 "cd webapp && make mrestart"
 	ssh -A 192.168.0.13 "cd webapp && make mrestart"
 

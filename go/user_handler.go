@@ -485,22 +485,34 @@ func verifyUserSession(c echo.Context) error {
 	return nil
 }
 
-func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (User, error) {
-	themeModel := ThemeModel{}
-	if err := tx.GetContext(ctx, &themeModel, "SELECT * FROM themes WHERE user_id = ?", userModel.ID); err != nil {
-		return User{}, err
+func FindUserById(ctx context.Context, tx *sqlx.Tx, userId int) (User, error) {
+	userModel := FullUserModel{}
+	if err := tx.GetContext(
+		ctx,
+		&userModel,
+		`
+	SELECT u.*, t.id AS 'theme.id', t.dark_mode AS 'theme.dark_mode', i.image AS user_image  FROM users u
+	LEFT JOIN themes t ON u.id = t.user_id
+	LEFT JOIN icons i ON u.id = i.user_id
+	WHERE u.id = ?`,
+		userId,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return User{}, echo.NewHTTPError(http.StatusNotFound, "not found user that has the given username")
+		}
+		return User{}, echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 	}
 
 	var image []byte
-	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			return User{}, err
-		}
-		image, err = os.ReadFile(fallbackImage)
+	image = userModel.UserImage
+	if image == nil {
+		dummy, err := os.ReadFile(fallbackImage)
 		if err != nil {
-			return User{}, err
+			return User{}, nil
 		}
+		image = dummy
 	}
+
 	iconHash := sha256.Sum256(image)
 
 	user := User{
@@ -509,8 +521,8 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 		DisplayName: userModel.DisplayName,
 		Description: userModel.Description,
 		Theme: Theme{
-			ID:       themeModel.ID,
-			DarkMode: themeModel.DarkMode,
+			ID:       userModel.Theme.ID,
+			DarkMode: userModel.Theme.DarkMode,
 		},
 		IconHash: fmt.Sprintf("%x", iconHash),
 	}

@@ -44,10 +44,7 @@ type FullUserModel struct {
 	Description    string `db:"description"`
 	HashedPassword string `db:"password"`
 	UserImage      []byte `db:"user_image"`
-	Theme          struct {
-		ID       int64 `db:"theme_id"`
-		DarkMode bool  `db:"theme_dark_mode"`
-	}
+	Theme          Theme  `db:"theme"`
 }
 
 type User struct {
@@ -370,7 +367,7 @@ func getUserHandler(c echo.Context) error {
 		ctx,
 		&userModel,
 		`
-	SELECT u.*, t.id AS theme_id, t.dark_mode AS theme_dark_mode, i.image AS user_image  FROM users u
+	SELECT u.*, t.id AS 'theme.id', t.dark_mode AS 'theme.dark_mode', i.image AS user_image  FROM users u
 	LEFT JOIN themes t ON u.id = t.user_id
 	LEFT JOIN icons i ON u.id = i.user_id
 	WHERE u.name = ?`,

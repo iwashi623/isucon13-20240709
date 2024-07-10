@@ -13,6 +13,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 )
 
 type ReserveLivestreamRequest struct {
@@ -44,7 +45,10 @@ type LivestreamModel struct {
 
 type LivestreamTagDBResult struct {
 	LivestreamModel
-	Tag *TagModel `db:"tag"`
+	Tag *struct {
+		ID   *int64  `db:"id"`
+		Name *string `db:"name"`
+	} `db:"tag"`
 }
 
 type FullLivestreamModel struct {
@@ -209,10 +213,10 @@ func reserveLivestreamHandler(c echo.Context) error {
 				Tags:         make([]Tag, 0),
 			}
 		}
-		if result.Tag != nil {
+		if result.Tag != nil && result.Tag.ID != nil && result.Tag.Name != nil {
 			fullLivestreamModel.Tags = append(fullLivestreamModel.Tags, Tag{
-				ID:   result.Tag.ID,
-				Name: result.Tag.Name,
+				ID:   lo.FromPtr(result.Tag.ID),
+				Name: lo.FromPtr(result.Tag.Name),
 			})
 		}
 	}

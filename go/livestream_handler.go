@@ -522,10 +522,13 @@ func findLivestreamByIdInTx(ctx context.Context, tx *sqlx.Tx, lsId int) (Livestr
 			u.description as "user.description",
 			u.password as "user.password",
 			t.id as "tag.id",
-			t.name as "tag.name"
+			t.name as "tag.name",
+			te.id AS 'user.theme.id',
+			te.dark_mode AS 'user.theme.dark_mode',
+			i.image AS 'user.user_image'
 		FROM livestreams ls
 		LEFT JOIN users u ON ls.user_id = u.id
-		LEFT JOIN themes t ON u.id = t.user_id
+		LEFT JOIN themes te ON u.id = te.user_id
 		LEFT JOIN icons i ON u.id = i.user_id
 		LEFT JOIN livestream_tags lst ON ls.id = lst.livestream_id
 		LEFT JOIN tags t ON lst.tag_id = t.id

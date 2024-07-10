@@ -189,14 +189,17 @@ func reserveLivestreamHandler(c echo.Context) error {
 		`
 		SELECT 
 			ls.*,
-			t.id as "tags.id",
-			t.name as "tags.name"
+			t.id as "tag.id",
+			t.name as "tag.name"
 		FROM livestreams ls
 		LEFT JOIN livestream_tags lst ON ls.id = lst.livestream_id
 		LEFT JOIN tags t ON lst.tag_id = t.id
 		WHERE ls.id = ?
 		`,
 		livestreamID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
+	}
 
 	var fullLivestreamModel *FullLivestreamModel
 	for _, result := range livestreamTagDBResult {
@@ -219,10 +222,6 @@ func reserveLivestreamHandler(c echo.Context) error {
 				Name: result.Tag.Name,
 			})
 		}
-	}
-
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
 	}
 
 	livestream := Livestream{

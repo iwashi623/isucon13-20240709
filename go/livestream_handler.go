@@ -194,7 +194,7 @@ func reserveLivestreamHandler(c echo.Context) error {
 		FROM livestreams ls
 		LEFT JOIN livestream_tags lst ON ls.id = lst.livestream_id
 		LEFT JOIN tags t ON lst.tag_id = t.id
-		WHERE id = ?
+		WHERE ls.id = ?
 		`,
 		livestreamID)
 

@@ -249,7 +249,7 @@ func searchLivestreamsHandler(c echo.Context) error {
 
 	livestreams := make([]Livestream, len(livestreamModels))
 	for i := range livestreamModels {
-		livestream, err := fillLivestreamResponse(ctx, tx, *livestreamModels[i])
+		livestream, err := findLivestreamByIdInTx(ctx, tx, int(livestreamModels[i].ID))
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
 		}
@@ -286,7 +286,7 @@ func getMyLivestreamsHandler(c echo.Context) error {
 	}
 	livestreams := make([]Livestream, len(livestreamModels))
 	for i := range livestreamModels {
-		livestream, err := fillLivestreamResponse(ctx, tx, *livestreamModels[i])
+		livestream, err := findLivestreamByIdInTx(ctx, tx, int(livestreamModels[i].ID))
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
 		}
@@ -329,7 +329,7 @@ func getUserLivestreamsHandler(c echo.Context) error {
 	}
 	livestreams := make([]Livestream, len(livestreamModels))
 	for i := range livestreamModels {
-		livestream, err := fillLivestreamResponse(ctx, tx, *livestreamModels[i])
+		livestream, err := findLivestreamByIdInTx(ctx, tx, int(livestreamModels[i].ID))
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
 		}
@@ -430,28 +430,9 @@ func getLivestreamHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "livestream_id in path must be integer")
 	}
 
-	tx, err := dbConn.BeginTxx(ctx, nil)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to begin transaction: "+err.Error())
-	}
-	defer tx.Rollback()
-
-	livestreamModel := LivestreamModel{}
-	err = tx.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livestreamID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return echo.NewHTTPError(http.StatusNotFound, "not found livestream that has the given id")
-	}
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestream: "+err.Error())
-	}
-
-	livestream, err := fillLivestreamResponse(ctx, tx, livestreamModel)
+	livestream, err := findLivestreamByIdInTx(ctx, dbConn, livestreamID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
-	}
-
-	if err := tx.Commit(); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	}
 
 	return c.JSON(http.StatusOK, livestream)
@@ -510,9 +491,9 @@ func getLivecommentReportsHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, reports)
 }
 
-func findLivestreamByIdInTx(ctx context.Context, tx *sqlx.Tx, lsId int) (Livestream, error) {
+func findLivestreamByIdInTx(ctx context.Context, db myDB, lsId int) (Livestream, error) {
 	var dbResult []*LivestreamTagDBResult
-	err := tx.SelectContext(ctx, &dbResult,
+	err := db.SelectContext(ctx, &dbResult,
 		`
 		SELECT 
 			ls.*,
@@ -601,43 +582,5 @@ func findLivestreamByIdInTx(ctx context.Context, tx *sqlx.Tx, lsId int) (Livestr
 		Tags:         fullLivestreamModel.Tags,
 	}
 
-	return livestream, nil
-}
-
-func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModel LivestreamModel) (Livestream, error) {
-	owner, err := FindUserById(ctx, tx, int(livestreamModel.UserID))
-	if err != nil {
-		return Livestream{}, err
-	}
-
-	var livestreamTagModels []*LivestreamTagModel
-	if err := tx.SelectContext(ctx, &livestreamTagModels, "SELECT * FROM livestream_tags WHERE livestream_id = ?", livestreamModel.ID); err != nil {
-		return Livestream{}, err
-	}
-
-	tags := make([]Tag, len(livestreamTagModels))
-	for i := range livestreamTagModels {
-		tagModel := TagModel{}
-		if err := tx.GetContext(ctx, &tagModel, "SELECT * FROM tags WHERE id = ?", livestreamTagModels[i].TagID); err != nil {
-			return Livestream{}, err
-		}
-
-		tags[i] = Tag{
-			ID:   tagModel.ID,
-			Name: tagModel.Name,
-		}
-	}
-
-	livestream := Livestream{
-		ID:           livestreamModel.ID,
-		Owner:        owner,
-		Title:        livestreamModel.Title,
-		Tags:         tags,
-		Description:  livestreamModel.Description,
-		PlaylistUrl:  livestreamModel.PlaylistUrl,
-		ThumbnailUrl: livestreamModel.ThumbnailUrl,
-		StartAt:      livestreamModel.StartAt,
-		EndAt:        livestreamModel.EndAt,
-	}
 	return livestream, nil
 }

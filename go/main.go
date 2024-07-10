@@ -4,6 +4,7 @@ package main
 // sqlx的な参考: https://jmoiron.github.io/sqlx/
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -258,4 +259,8 @@ func errorResponseHandler(err error, c echo.Context) {
 	if e := c.JSON(http.StatusInternalServerError, &ErrorResponse{Error: err.Error()}); e != nil {
 		c.Logger().Errorf("%+v", e)
 	}
+}
+
+type myDB interface {
+	SelectContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
 }

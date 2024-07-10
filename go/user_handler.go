@@ -38,13 +38,13 @@ type UserModel struct {
 }
 
 type FullUserModel struct {
-	ID             int64  `db:"id"`
-	Name           string `db:"name"`
-	DisplayName    string `db:"display_name"`
-	Description    string `db:"description"`
-	HashedPassword string `db:"password"`
-	UserImage      []byte `db:"user_image"`
-	Theme          Theme  `db:"theme"`
+	ID             int64       `db:"id"`
+	Name           string      `db:"name"`
+	DisplayName    string      `db:"display_name"`
+	Description    string      `db:"description"`
+	HashedPassword string      `db:"password"`
+	UserImage      []byte      `db:"user_image"`
+	Theme          *ThemeModel `db:"theme"`
 }
 
 type User struct {

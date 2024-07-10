@@ -44,7 +44,10 @@ type FullUserModel struct {
 	Description    string `db:"description"`
 	HashedPassword string `db:"password"`
 	UserImage      []byte `db:"user_image"`
-	Theme          Theme  `db:"theme"`
+	Theme          struct {
+		ID       int64 `db:"theme_id"`
+		DarkMode bool  `db:"theme_dark_mode"`
+	}
 }
 
 type User struct {

@@ -58,7 +58,7 @@ mrestart:
 # アプリのログを見る
 .PHONY: nalp
 nalp:
-	sudo cat /var/log/nginx/access.log | alp ltsv -m "/api/organizer/competition/[-0-9a-zA-Z]+/finish","/api/player/competition/[-0-9a-zA-Z]+/ranking","/api/player/player/[-0-9a-zA-Z]+","/api/organizer/competition/[-0-9a-zA-Z]+/score","/api/organizer/player/[-0-9a-zA-Z]+/disqualified" --sort=sum --reverse --filters 'Time > TimeAgo("10m")'
+	sudo cat /var/log/nginx/access.log | alp ltsv -m "/api/user/[-0-9a-zA-Z]+","/api/livestream/[-0-9a-zA-Z]+/livecomment","/api/livestream/[-0-9a-zA-Z]+/livecomment/[-0-9]+/report","/api/livestream/[-0-9a-zA-Z]+/livecomment","/api/livestream/[-0-9a-zA-Z]+/reaction","/api/livestream/[-0-9a-zA-Z]+/moderate","/api/livestream/[-0-9a-zA-Z]+/statistics","/api/livestream/[-0-9a-zA-Z]+/livecomment","/api/livestream/[-0-9a-zA-Z]+/reaction","/api/livestream/[-0-9a-zA-Z]+/report","/api/livestream/[-0-9a-zA-Z]+/ngwords","/api/livestream/[-0-9a-zA-Z]+/enter","/api/livestream/[-0-9a-zA-Z]+/exit","/api/user/[-0-9a-zA-Z]+/theme"  --sort=sum --reverse --filters 'Time > TimeAgo("30m")'
 
 # mysqlのslowlogを見る
 .PHONY: pt

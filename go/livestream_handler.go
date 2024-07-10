@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -45,7 +47,7 @@ type LivestreamModel struct {
 
 type LivestreamTagDBResult struct {
 	LivestreamModel
-	User *UserModel `db:"user"`
+	User *FullUserModel `db:"user"`
 	Tag  *struct {
 		ID   *int64  `db:"id"`
 		Name *string `db:"name"`
@@ -509,8 +511,8 @@ func getLivecommentReportsHandler(c echo.Context) error {
 }
 
 func findLivestreamByIdInTx(ctx context.Context, tx *sqlx.Tx, lsId int) (Livestream, error) {
-	var livestreamTagDBResult []*LivestreamTagDBResult
-	err := tx.SelectContext(ctx, &livestreamTagDBResult,
+	var dbResult []*LivestreamTagDBResult
+	err := tx.SelectContext(ctx, &dbResult,
 		`
 		SELECT 
 			ls.*,
@@ -523,6 +525,8 @@ func findLivestreamByIdInTx(ctx context.Context, tx *sqlx.Tx, lsId int) (Livestr
 			t.name as "tag.name"
 		FROM livestreams ls
 		LEFT JOIN users u ON ls.user_id = u.id
+		LEFT JOIN themes t ON u.id = t.user_id
+		LEFT JOIN icons i ON u.id = i.user_id
 		LEFT JOIN livestream_tags lst ON ls.id = lst.livestream_id
 		LEFT JOIN tags t ON lst.tag_id = t.id
 		WHERE ls.id = ?
@@ -532,8 +536,13 @@ func findLivestreamByIdInTx(ctx context.Context, tx *sqlx.Tx, lsId int) (Livestr
 		return Livestream{}, echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
 	}
 
+	dummy, err := os.ReadFile(fallbackImage)
+	if err != nil {
+		return Livestream{}, nil
+	}
+
 	var fullLivestreamModel *FullLivestreamModel
-	for _, result := range livestreamTagDBResult {
+	for _, result := range dbResult {
 		if fullLivestreamModel == nil {
 			fullLivestreamModel = &FullLivestreamModel{
 				ID:           result.ID,
@@ -547,12 +556,25 @@ func findLivestreamByIdInTx(ctx context.Context, tx *sqlx.Tx, lsId int) (Livestr
 				Tags:         make([]Tag, 0),
 			}
 
+			var image []byte
+			image = result.User.UserImage
+			if image == nil {
+				image = dummy
+			}
+
+			iconHash := sha256.Sum256(image)
+
 			if result.User != nil {
 				fullLivestreamModel.User = &User{
 					ID:          result.User.ID,
 					Name:        result.User.Name,
 					DisplayName: result.User.DisplayName,
 					Description: result.User.Description,
+					Theme: Theme{
+						ID:       result.User.Theme.ID,
+						DarkMode: result.User.Theme.DarkMode,
+					},
+					IconHash: fmt.Sprintf("%x", iconHash),
 				}
 			}
 		}

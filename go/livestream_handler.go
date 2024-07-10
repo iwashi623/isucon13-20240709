@@ -518,7 +518,7 @@ func findLivestreamByIdInTx(ctx context.Context, tx *sqlx.Tx, lsId int) (Livestr
 			u.name as "user.name",
 			u.display_name as "user.display_name",
 			u.description as "user.description",
-			u.hash_password as "user.hash_password",
+			u.password as "user.password",
 			t.id as "tag.id",
 			t.name as "tag.name"
 		FROM livestreams ls

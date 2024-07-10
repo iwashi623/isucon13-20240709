@@ -45,7 +45,8 @@ type LivestreamModel struct {
 
 type LivestreamTagDBResult struct {
 	LivestreamModel
-	Tag *struct {
+	User *UserModel `db:"user"`
+	Tag  *struct {
 		ID   *int64  `db:"id"`
 		Name *string `db:"name"`
 	} `db:"tag"`
@@ -62,6 +63,7 @@ type FullLivestreamModel struct {
 	EndAt        int64  `db:"end_at" json:"end_at"`
 
 	Tags []Tag `db:"tags" json:"tags"`
+	User *User `db:"user" json:"user"`
 }
 
 type Livestream struct {
@@ -180,57 +182,9 @@ func reserveLivestreamHandler(c echo.Context) error {
 		}
 	}
 
-	// livestream, err := fillLivestreamResponse(ctx, tx, *livestreamModel)
-	var livestreamTagDBResult []*LivestreamTagDBResult
-	err = tx.SelectContext(ctx, &livestreamTagDBResult,
-		`
-		SELECT 
-			ls.*,
-			t.id as "tag.id",
-			t.name as "tag.name"
-		FROM livestreams ls
-		LEFT JOIN livestream_tags lst ON ls.id = lst.livestream_id
-		LEFT JOIN tags t ON lst.tag_id = t.id
-		WHERE ls.id = ?
-		`,
-		livestreamID)
+	livestream, err := findLivestreamByIdInTx(ctx, tx, int(livestreamID))
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
-	}
-
-	var fullLivestreamModel *FullLivestreamModel
-	for _, result := range livestreamTagDBResult {
-		if fullLivestreamModel == nil {
-			fullLivestreamModel = &FullLivestreamModel{
-				ID:           result.ID,
-				UserID:       result.UserID,
-				Title:        result.Title,
-				Description:  result.Description,
-				PlaylistUrl:  result.PlaylistUrl,
-				ThumbnailUrl: result.ThumbnailUrl,
-				StartAt:      result.StartAt,
-				EndAt:        result.EndAt,
-				Tags:         make([]Tag, 0),
-			}
-		}
-		if result.Tag != nil && result.Tag.ID != nil && result.Tag.Name != nil {
-			fullLivestreamModel.Tags = append(fullLivestreamModel.Tags, Tag{
-				ID:   lo.FromPtr(result.Tag.ID),
-				Name: lo.FromPtr(result.Tag.Name),
-			})
-		}
-	}
-
-	livestream := Livestream{
-		ID:           fullLivestreamModel.ID,
-		Owner:        User{ID: fullLivestreamModel.UserID},
-		Title:        fullLivestreamModel.Title,
-		Description:  fullLivestreamModel.Description,
-		PlaylistUrl:  fullLivestreamModel.PlaylistUrl,
-		ThumbnailUrl: fullLivestreamModel.ThumbnailUrl,
-		StartAt:      fullLivestreamModel.StartAt,
-		EndAt:        fullLivestreamModel.EndAt,
-		Tags:         fullLivestreamModel.Tags,
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to find livestream: "+err.Error())
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -552,6 +506,77 @@ func getLivecommentReportsHandler(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, reports)
+}
+
+func findLivestreamByIdInTx(ctx context.Context, tx *sqlx.Tx, lsId int) (Livestream, error) {
+	var livestreamTagDBResult []*LivestreamTagDBResult
+	err := tx.SelectContext(ctx, &livestreamTagDBResult,
+		`
+		SELECT 
+			ls.*,
+			u.id as "user.id",
+			u.name as "user.name",
+			u.display_name as "user.display_name",
+			u.description as "user.description",
+			u.hash_password as "user.hash_password",
+			t.id as "tag.id",
+			t.name as "tag.name"
+		FROM livestreams ls
+		LEFT JOIN users u ON ls.user_id = u.id
+		LEFT JOIN livestream_tags lst ON ls.id = lst.livestream_id
+		LEFT JOIN tags t ON lst.tag_id = t.id
+		WHERE ls.id = ?
+		`,
+		lsId)
+	if err != nil {
+		return Livestream{}, echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
+	}
+
+	var fullLivestreamModel *FullLivestreamModel
+	for _, result := range livestreamTagDBResult {
+		if fullLivestreamModel == nil {
+			fullLivestreamModel = &FullLivestreamModel{
+				ID:           result.ID,
+				UserID:       result.UserID,
+				Title:        result.Title,
+				Description:  result.Description,
+				PlaylistUrl:  result.PlaylistUrl,
+				ThumbnailUrl: result.ThumbnailUrl,
+				StartAt:      result.StartAt,
+				EndAt:        result.EndAt,
+				Tags:         make([]Tag, 0),
+			}
+
+			if result.User != nil {
+				fullLivestreamModel.User = &User{
+					ID:          result.User.ID,
+					Name:        result.User.Name,
+					DisplayName: result.User.DisplayName,
+					Description: result.User.Description,
+				}
+			}
+		}
+		if result.Tag != nil && result.Tag.ID != nil && result.Tag.Name != nil {
+			fullLivestreamModel.Tags = append(fullLivestreamModel.Tags, Tag{
+				ID:   lo.FromPtr(result.Tag.ID),
+				Name: lo.FromPtr(result.Tag.Name),
+			})
+		}
+	}
+
+	livestream := Livestream{
+		ID:           fullLivestreamModel.ID,
+		Owner:        *fullLivestreamModel.User,
+		Title:        fullLivestreamModel.Title,
+		Description:  fullLivestreamModel.Description,
+		PlaylistUrl:  fullLivestreamModel.PlaylistUrl,
+		ThumbnailUrl: fullLivestreamModel.ThumbnailUrl,
+		StartAt:      fullLivestreamModel.StartAt,
+		EndAt:        fullLivestreamModel.EndAt,
+		Tags:         fullLivestreamModel.Tags,
+	}
+
+	return livestream, nil
 }
 
 func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModel LivestreamModel) (Livestream, error) {

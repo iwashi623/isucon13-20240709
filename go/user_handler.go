@@ -319,6 +319,12 @@ func registerHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert DNS record: "+err.Error())
 	}
 
+	image, err := os.ReadFile(fallbackImage)
+	if err != nil {
+		user := User{}
+		return c.JSON(http.StatusOK, user)
+	}
+
 	user := User{
 		ID:          userModel.ID,
 		Name:        userModel.Name,
@@ -328,7 +334,7 @@ func registerHandler(c echo.Context) error {
 			ID:       themeModel.ID,
 			DarkMode: themeModel.DarkMode,
 		},
-		IconHash: "",
+		IconHash: fmt.Sprintf("%x", sha256.Sum256(image)),
 	}
 
 	return c.JSON(http.StatusCreated, user)

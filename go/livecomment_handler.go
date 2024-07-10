@@ -439,7 +439,7 @@ func findLivecommentById(ctx context.Context, db myDB, id int) (Livecomment, err
 			ID   *int64  `db:"id"`
 			Name *string `db:"name"`
 		} `db:"tag"`
-		Owner      *FullUserModel         `db:"owner"`
+		User       *FullUserModel         `db:"user"`
 		Livestream *LivestreamTagDBResult `db:"livestream"`
 	}
 
@@ -464,14 +464,14 @@ func findLivecommentById(ctx context.Context, db myDB, id int) (Livecomment, err
 			ute.id AS 'user.theme.id',
 			ute.dark_mode AS 'user.theme.dark_mode',
 			ui.image AS 'user.user_image',
-			o.id AS 'livestream.owner.id',
-			o.name AS 'livestream.owner.name',
-			o.display_name AS 'livestream.owner.display_name',
-			o.description AS 'livestream.owner.description',
-			o.password AS 'livestream.owner.password',
-			ote.id AS 'livestream.owner.theme.id',
-			ote.dark_mode AS 'livestream.owner.theme.dark_mode',
-			oi.image AS 'livestream.owner.user_image',
+			o.id AS 'livestream.user.id',
+			o.name AS 'livestream.user.name',
+			o.display_name AS 'livestream.user.display_name',
+			o.description AS 'livestream.user.description',
+			o.password AS 'livestream.user.password',
+			ote.id AS 'livestream.user.theme.id',
+			ote.dark_mode AS 'livestream.user.theme.dark_mode',
+			oi.image AS 'livestream.user.user_image',
 			t.id AS 'tag.id',
 			t.name AS 'tag.name'
 		FROM livecomments lc
@@ -509,13 +509,13 @@ func findLivecommentById(ctx context.Context, db myDB, id int) (Livecomment, err
 					CreatedAt:    r.CreatedAt,
 				},
 				User: &User{
-					ID:          r.Owner.ID,
-					Name:        r.Owner.Name,
-					DisplayName: r.Owner.DisplayName,
-					Description: r.Owner.Description,
+					ID:          r.User.ID,
+					Name:        r.User.Name,
+					DisplayName: r.User.DisplayName,
+					Description: r.User.Description,
 					Theme: Theme{
-						ID:       r.Owner.Theme.ID,
-						DarkMode: r.Owner.Theme.DarkMode,
+						ID:       r.User.Theme.ID,
+						DarkMode: r.User.Theme.DarkMode,
 					},
 				},
 				LiveStream: &Livestream{
@@ -542,7 +542,7 @@ func findLivecommentById(ctx context.Context, db myDB, id int) (Livecomment, err
 			}
 		}
 		var userImage []byte
-		userImage = r.Livestream.User.UserImage
+		userImage = r.User.UserImage
 		if userImage == nil {
 			userImage = dummy
 		}
@@ -551,7 +551,7 @@ func findLivecommentById(ctx context.Context, db myDB, id int) (Livecomment, err
 		model.User.IconHash = fmt.Sprintf("%x", userIconHash)
 
 		var ownerImage []byte
-		ownerImage = r.Owner.UserImage
+		ownerImage = r.Livestream.User.UserImage
 		if ownerImage == nil {
 			ownerImage = dummy
 		}

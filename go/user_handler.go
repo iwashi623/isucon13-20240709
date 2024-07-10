@@ -185,28 +185,69 @@ func getMeHandler(c echo.Context) error {
 	// existence already checked
 	userID := sess.Values[defaultUserIDKey].(int64)
 
-	tx, err := dbConn.BeginTxx(ctx, nil)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to begin transaction: "+err.Error())
-	}
-	defer tx.Rollback()
+	// tx, err := dbConn.BeginTxx(ctx, nil)
+	// if err != nil {
+	// 	return echo.NewHTTPError(http.StatusInternalServerError, "failed to begin transaction: "+err.Error())
+	// }
+	// defer tx.Rollback()
 
-	userModel := UserModel{}
-	err = tx.GetContext(ctx, &userModel, "SELECT * FROM users WHERE id = ?", userID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return echo.NewHTTPError(http.StatusNotFound, "not found user that has the userid in session")
-	}
-	if err != nil {
+	// userModel := UserModel{}
+	// err = tx.GetContext(ctx, &userModel, "SELECT * FROM users WHERE id = ?", userID)
+	// if errors.Is(err, sql.ErrNoRows) {
+	// 	return echo.NewHTTPError(http.StatusNotFound, "not found user that has the userid in session")
+	// }
+	// if err != nil {
+	// 	return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
+	// }
+
+	// user, err := fillUserResponse(ctx, tx, userModel)
+	// if err != nil {
+	// 	return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill user: "+err.Error())
+	// }
+
+	// if err := tx.Commit(); err != nil {
+	// 	return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
+	// }
+	userModel := FullUserModel{}
+	if err := dbConn.GetContext(
+		ctx,
+		&userModel,
+		`
+	SELECT u.*, t.id AS 'theme.id', t.dark_mode AS 'theme.dark_mode', i.image AS user_image  FROM users u
+	LEFT JOIN themes t ON u.id = t.user_id
+	LEFT JOIN icons i ON u.id = i.user_id
+	WHERE u.id = ?`,
+		userID,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return echo.NewHTTPError(http.StatusNotFound, "not found user that has the given username")
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 	}
 
-	user, err := fillUserResponse(ctx, tx, userModel)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill user: "+err.Error())
+	var image []byte
+	image = userModel.UserImage
+	if image == nil {
+		dummy, err := os.ReadFile(fallbackImage)
+		if err != nil {
+			user := User{}
+			return c.JSON(http.StatusOK, user)
+		}
+		image = dummy
 	}
 
-	if err := tx.Commit(); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
+	iconHash := sha256.Sum256(image)
+
+	user := User{
+		ID:          userModel.ID,
+		Name:        userModel.Name,
+		DisplayName: userModel.DisplayName,
+		Description: userModel.Description,
+		Theme: Theme{
+			ID:       userModel.Theme.ID,
+			DarkMode: userModel.Theme.DarkMode,
+		},
+		IconHash: fmt.Sprintf("%x", iconHash),
 	}
 
 	return c.JSON(http.StatusOK, user)
@@ -265,6 +306,10 @@ func registerHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert user theme: "+err.Error())
 	}
 
+	if err := tx.Commit(); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
+	}
+
 	// if out, err := exec.Command("pdnsutil", "add-record", "t.isucon.pw", req.Name, "A", "0", powerDNSSubdomainAddress).CombinedOutput(); err != nil {
 	// 	return echo.NewHTTPError(http.StatusInternalServerError, string(out)+": "+err.Error())
 	// }
@@ -274,13 +319,16 @@ func registerHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert DNS record: "+err.Error())
 	}
 
-	user, err := fillUserResponse(ctx, tx, userModel)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill user: "+err.Error())
-	}
-
-	if err := tx.Commit(); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
+	user := User{
+		ID:          userModel.ID,
+		Name:        userModel.Name,
+		DisplayName: userModel.DisplayName,
+		Description: userModel.Description,
+		Theme: Theme{
+			ID:       themeModel.ID,
+			DarkMode: themeModel.DarkMode,
+		},
+		IconHash: "",
 	}
 
 	return c.JSON(http.StatusCreated, user)
